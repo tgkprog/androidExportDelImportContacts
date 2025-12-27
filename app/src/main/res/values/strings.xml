@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Contacts Delete</string>
+    <string name="export_contacts">Export Contacts</string>
+    <string name="delete_all_contacts">Delete All Contacts</string>
+    <string name="import_contacts">Import Contacts</string>
+    
+    <string name="confirm_export_title">Confirm Export</string>
+    <string name="confirm_export_message">Export all contacts to:\n/Download/com.sel2in.contactsDelete/out.contacts?</string>
+    
+    <string name="confirm_delete_title">Confirm Delete</string>
+    <string name="confirm_delete_message">Delete ALL contacts from your device?\n\nThis action cannot be undone!</string>
+    
+    <string name="confirm_import_title">Confirm Import</string>
+    <string name="confirm_import_message">Import contacts from:\n/Download/com.sel2in.contactsDelete/in.contacts?\n\nThis will add contacts to your device.</string>
+    
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    
+    <string name="export_success">Contacts exported successfully!</string>
+    <string name="export_error">Error exporting contacts</string>
+    <string name="delete_success">All contacts deleted!</string>
+    <string name="delete_error">Error deleting contacts</string>
+    <string name="import_success">Contacts imported successfully!</string>
+    <string name="import_error">Error importing contacts</string>
+    <string name="import_file_not_found">Import file not found</string>
+    
+    <string name="permission_required">Contacts permission is required</string>
+</resources>

@@ -1,0 +1,228 @@
+make Android app.native kotlin called com.sel2in.contactsDelete that asks for write settings, read and write contacts, exports all contacts in json or text, all attributes in a way that they can be imported again. Button export Write file to /internal storage/Download/com.sel2in.contactsDelete/out.contacts Delete : delete all contacts Import, import from internal storage/Download/com.sel2in.contactsDelete/in.contacts
+
+Permissions (Android 13+)
+<uses-permission android:name="android.permission.READ_CONTACTS"/>
+<uses-permission android:name="android.permission.WRITE_CONTACTS"/>
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    android:maxSdkVersion="28"/>
+
+
+Runtime permissions required for contacts.
+
+File paths
+Export: /storage/emulated/0/Download/com.sel2in.contactsDelete/out.contacts
+Import: /storage/emulated/0/Download/com.sel2in.contactsDelete/in.contacts
+
+
+Create directory if missing.
+
+Data format (JSON, line-delimited)
+
+Each contact = one JSON object per line.
+
+Fields included:
+
+displayName
+
+phones[]
+
+emails[]
+
+notes
+
+Kotlin code (core logic)
+data class ContactExport(
+    val displayName: String?,
+    val phones: List<String>,
+    val emails: List<String>,
+    val notes: String?
+)
+
+Export all contacts
+fun exportContacts(context: Context) {
+    val dir = File(
+        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+        "com.sel2in.contactsDelete"
+    )
+    dir.mkdirs()
+    val outFile = File(dir, "out.contacts")
+
+    val cr = context.contentResolver
+    val writer = outFile.bufferedWriter()
+
+    val cursor = cr.query(
+        ContactsContract.Contacts.CONTENT_URI,
+        null, null, null, null
+    ) ?: return
+
+    while (cursor.moveToNext()) {
+        val id = cursor.getString(
+            cursor.getColumnIndexOrThrow(ContactsContract.Contacts._ID)
+        )
+        val name = cursor.getString(
+            cursor.getColumnIndexOrThrow(ContactsContract.Contacts.DISPLAY_NAME)
+        )
+
+        val phones = mutableListOf<String>()
+        cr.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            null,
+            "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID}=?",
+            arrayOf(id),
+            null
+        )?.use { pCur ->
+            while (pCur.moveToNext()) {
+                phones.add(
+                    pCur.getString(
+                        pCur.getColumnIndexOrThrow(
+                            ContactsContract.CommonDataKinds.Phone.NUMBER
+                        )
+                    )
+                )
+            }
+        }
+
+        val emails = mutableListOf<String>()
+        cr.query(
+            ContactsContract.CommonDataKinds.Email.CONTENT_URI,
+            null,
+            "${ContactsContract.CommonDataKinds.Email.CONTACT_ID}=?",
+            arrayOf(id),
+            null
+        )?.use { eCur ->
+            while (eCur.moveToNext()) {
+                emails.add(
+                    eCur.getString(
+                        eCur.getColumnIndexOrThrow(
+                            ContactsContract.CommonDataKinds.Email.ADDRESS
+                        )
+                    )
+                )
+            }
+        }
+
+        val obj = ContactExport(name, phones, emails, null)
+        writer.write(JSONObject().apply {
+            put("displayName", obj.displayName)
+            put("phones", JSONArray(obj.phones))
+            put("emails", JSONArray(obj.emails))
+        }.toString())
+        writer.newLine()
+    }
+
+    cursor.close()
+    writer.close()
+}
+
+Delete all contacts
+fun deleteAllContacts(context: Context) {
+    context.contentResolver.delete(
+        ContactsContract.RawContacts.CONTENT_URI,
+        null,
+        null
+    )
+}
+
+Import contacts
+fun importContacts(context: Context) {
+    val file = File(
+        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+        "com.sel2in.contactsDelete/in.contacts"
+    )
+    if (!file.exists()) return
+
+    file.forEachLine { line ->
+        val json = JSONObject(line)
+
+        val ops = ArrayList<ContentProviderOperation>()
+
+        ops.add(
+            ContentProviderOperation.newInsert(ContactsContract.RawContacts.CONTENT_URI)
+                .withValue(ContactsContract.RawContacts.ACCOUNT_TYPE, null)
+                .withValue(ContactsContract.RawContacts.ACCOUNT_NAME, null)
+                .build()
+        )
+
+        json.optString("displayName")?.let {
+            ops.add(
+                ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                    .withValueBackReference(
+                        ContactsContract.Data.RAW_CONTACT_ID, 0
+                    )
+                    .withValue(
+                        ContactsContract.Data.MIMETYPE,
+                        ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE
+                    )
+                    .withValue(
+                        ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, it
+                    )
+                    .build()
+            )
+        }
+
+        json.optJSONArray("phones")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                ops.add(
+                    ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                        .withValueBackReference(
+                            ContactsContract.Data.RAW_CONTACT_ID, 0
+                        )
+                        .withValue(
+                            ContactsContract.Data.MIMETYPE,
+                            ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE
+                        )
+                        .withValue(
+                            ContactsContract.CommonDataKinds.Phone.NUMBER,
+                            arr.getString(i)
+                        )
+                        .withValue(
+                            ContactsContract.CommonDataKinds.Phone.TYPE,
+                            ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE
+                        )
+                        .build()
+                )
+            }
+        }
+
+        json.optJSONArray("emails")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                ops.add(
+                    ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                        .withValueBackReference(
+                            ContactsContract.Data.RAW_CONTACT_ID, 0
+                        )
+                        .withValue(
+                            ContactsContract.Data.MIMETYPE,
+                            ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE
+                        )
+                        .withValue(
+                            ContactsContract.CommonDataKinds.Email.ADDRESS,
+                            arr.getString(i)
+                        )
+                        .build()
+                )
+            }
+        }
+
+        context.contentResolver.applyBatch(
+            ContactsContract.AUTHORITY,
+            ops
+        )
+    }
+}
+
+UI
+
+Three buttons:
+
+Export
+
+Delete All
+
+Import
+
+Call above functions after runtime permission grant
+
+for each ui action ask user if they are sure in an in lay without default button, so they can tap and then do the action
+
+targets android 13+
